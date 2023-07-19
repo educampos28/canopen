@@ -501,12 +501,16 @@ class BaseNode402(RemoteNode):
 
     @property
     def controlword(self):
-        """Send a state change command using PDO or SDO.
+        """Return the last read value of the controlword (0x6040) from the device.
 
-        :param int value: Controlword value to set.
-        :raises RuntimeError: Read access to the controlword is not intended.
+        If the object 0x6040 is not configured in any TPDO it will fall back to the SDO
+        mechanism and try to get the value.
         """
-        raise RuntimeError('The Controlword is write-only.')
+        try:
+            return self.tpdo_values[0x6040]
+        except KeyError:
+            logger.warning('The object 0x6040 is not a configured TPDO, fallback to SDO')
+            return self.sdo[0x6040].raw
 
     @controlword.setter
     def controlword(self, value):
@@ -570,7 +574,8 @@ class BaseNode402(RemoteNode):
 
     def _change_state(self, target_state):
         try:
-            self.controlword = State402.TRANSITIONTABLE[(self.state, target_state)]
+            #When transitioning states, the TRANSITIONTABLE should ensure that it does not interfere with the other bits.
+            self.controlword = (self.controlword & 0xFF70) | State402.TRANSITIONTABLE[(self.state, target_state)]
         except KeyError:
             raise ValueError(
                 'Illegal state transition from {f} to {t}'.format(f=self.state, t=target_state))
